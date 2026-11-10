@@ -25,8 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	treebindv1alpha1 "github.com/mohanedmoh/treebind/api/v1alpha1"
 )
 
@@ -49,14 +47,7 @@ var _ = Describe("Treebind Controller", func() {
 			By("creating the custom resource for the Kind Treebind")
 			err := k8sClient.Get(ctx, typeNamespacedName, treebind)
 			if err != nil && errors.IsNotFound(err) {
-				resource := &treebindv1alpha1.Treebind{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: resourceNamespace,
-					},
-					// TODO(user): Specify other spec details if needed.
-				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+				Expect(k8sClient.Create(ctx, newTreebind(resourceName))).To(Succeed())
 			}
 		})
 

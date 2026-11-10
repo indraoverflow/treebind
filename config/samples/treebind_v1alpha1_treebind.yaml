@@ -6,4 +6,30 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: treebind-sample
 spec:
-  # TODO(user): Add fields here
+  repository:
+    url: ssh://git@github.com/acme/dashboards.git
+    branch: main
+    auth:
+      sshKeySecretRef:
+        name: dashboards-deploy-key
+        key: id_ed25519
+      knownHostsConfigMapRef:
+        name: git-known-hosts
+        key: known_hosts
+  target:
+    claimName: grafana-data
+    subPath: dashboards
+    mountPath: /work
+  sync:
+    direction: bidirectional
+    interval: 30s
+    settleTime: 5s
+    conflictPolicy: followRemote
+  commit:
+    authorName: treebind
+    authorEmail: treebind@example.org
+    messageTemplate: "treebind: sync {{ .Count }} file(s)"
+  paths:
+    exclude:
+      - "*.tmp"
+      - "*.swp"
