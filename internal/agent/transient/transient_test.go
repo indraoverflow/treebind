@@ -64,7 +64,6 @@ func TestDefaultTransientPatternsAreValid(t *testing.T) {
 }
 
 func TestSettled(t *testing.T) {
-	now := time.Unix(100, 0)
 	lastChange := time.Unix(95, 0)
 	settle := 5 * time.Second
 
@@ -88,6 +87,4 @@ func TestSettled(t *testing.T) {
 			}
 		})
 	}
-
-	_ = now
 }
