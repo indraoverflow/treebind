@@ -39,25 +39,448 @@ spec:
           spec:
             description: spec defines the desired state of Treebind
             properties:
-              foo:
-                description: foo is an example field of Treebind. Edit treebind_types.go
-                  to remove/update
-                type: string
+              agent:
+                description: agent overrides how the sync pod is scheduled and run.
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: annotations are added to the sync pod.
+                    maxProperties: 32
+                    type: object
+                  fsGroup:
+                    description: |-
+                      fsGroup is the group ID that owns the mounted volume, so the sync
+                      container can write to a claim that the application's user created.
+                    format: int64
+                    minimum: 0
+                    type: integer
+                  imagePullSecrets:
+                    description: |-
+                      imagePullSecrets names the Secrets in the Treebind's namespace used to
+                      pull the agent image.
+                    items:
+                      description: |-
+                        LocalObjectReference contains enough information to let you locate the
+                        referenced object inside the same namespace.
+                      properties:
+                        name:
+                          default: ""
+                          description: |-
+                            Name of the referent.
+                            This field is effectively required, but due to backwards compatibility is
+                            allowed to be empty. Instances of this type with an empty value here are
+                            almost certainly wrong.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                      x-kubernetes-validations:
+                      - message: imagePullSecrets entries need a name
+                        rule: size(self.name) > 0
+                    maxItems: 16
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: labels are added to the sync pod.
+                    maxProperties: 32
+                    type: object
+                  nodeSelector:
+                    additionalProperties:
+                      type: string
+                    description: nodeSelector restricts the nodes the sync pod can
+                      run on.
+                    maxProperties: 32
+                    type: object
+                  priorityClassName:
+                    description: priorityClassName is the priority class of the sync
+                      pod.
+                    maxLength: 253
+                    type: string
+                  resources:
+                    description: resources are the compute resources of the sync container.
+                    properties:
+                      claims:
+                        description: |-
+                          Claims lists the names of resources, defined in spec.resourceClaims,
+                          that are used by this container.
+
+                          This field depends on the
+                          DynamicResourceAllocation feature gate.
+
+                          This field is immutable. It can only be set for containers.
+                        items:
+                          description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                          properties:
+                            name:
+                              description: |-
+                                Name must match the name of one entry in pod.spec.resourceClaims of
+                                the Pod where this field is used. It makes that resource available
+                                inside a container.
+                              type: string
+                            request:
+                              description: |-
+                                Request is the name chosen for a request in the referenced claim.
+                                If empty, everything from the claim is made available, otherwise
+                                only the result of this request.
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - name
+                        x-kubernetes-list-type: map
+                      limits:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: |-
+                          Limits describes the maximum amount of compute resources allowed.
+                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                        type: object
+                      requests:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: |-
+                          Requests describes the minimum amount of compute resources required.
+                          If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                          otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                        type: object
+                    type: object
+                  runAsGroup:
+                    description: runAsGroup is the group ID the sync container runs
+                      as.
+                    format: int64
+                    minimum: 0
+                    type: integer
+                  runAsUser:
+                    description: runAsUser is the user ID the sync container runs
+                      as.
+                    format: int64
+                    minimum: 0
+                    type: integer
+                  tolerations:
+                    description: tolerations lets the sync pod run on nodes with matching
+                      taints.
+                    items:
+                      description: |-
+                        The pod this Toleration is attached to tolerates any taint that matches
+                        the triple <key,value,effect> using the matching operator <operator>.
+                      properties:
+                        effect:
+                          description: |-
+                            Effect indicates the taint effect to match. Empty means match all taint effects.
+                            When specified, allowed values are NoSchedule, PreferNoSchedule and NoExecute.
+                          type: string
+                        key:
+                          description: |-
+                            Key is the taint key that the toleration applies to. Empty means match all taint keys.
+                            If the key is empty, operator must be Exists; this combination means to match all values and all keys.
+                          type: string
+                        operator:
+                          description: |-
+                            Operator represents a key's relationship to the value.
+                            Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                            Exists is equivalent to wildcard for value, so that a pod can
+                            tolerate all taints of a particular category.
+                            Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
+                          type: string
+                        tolerationSeconds:
+                          description: |-
+                            TolerationSeconds represents the period of time the toleration (which must be
+                            of effect NoExecute, otherwise this field is ignored) tolerates the taint. By default,
+                            it is not set, which means tolerate the taint forever (do not evict). Zero and
+                            negative values will be treated as 0 (evict immediately) by the system.
+                          format: int64
+                          type: integer
+                        value:
+                          description: |-
+                            Value is the taint value the toleration matches to.
+                            If the operator is Exists, the value should be empty, otherwise just a regular string.
+                          type: string
+                      type: object
+                    maxItems: 32
+                    type: array
+                    x-kubernetes-list-type: atomic
+                type: object
+              commit:
+                description: commit controls the commits created from local edits.
+                properties:
+                  authorEmail:
+                    description: authorEmail is the email recorded as the author of
+                      every commit.
+                    type: string
+                  authorName:
+                    description: authorName is the name recorded as the author of
+                      every commit.
+                    type: string
+                  messageTemplate:
+                    description: messageTemplate is the commit message, as a Go text/template.
+                    type: string
+                type: object
+              paths:
+                description: paths limits which files are synced.
+                properties:
+                  exclude:
+                    description: |-
+                      exclude lists the patterns of files to leave out, for example temporary
+                      and swap files.
+                    items:
+                      maxLength: 512
+                      minLength: 1
+                      type: string
+                      x-kubernetes-validations:
+                      - message: patterns must be relative and must not contain '..'
+                        rule: '!self.startsWith(''/'') && !(''..'' in self.split(''/''))'
+                    maxItems: 64
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  include:
+                    description: |-
+                      include lists the patterns of files to sync. Everything is included when
+                      the list is empty.
+                    items:
+                      maxLength: 512
+                      minLength: 1
+                      type: string
+                      x-kubernetes-validations:
+                      - message: patterns must be relative and must not contain '..'
+                        rule: '!self.startsWith(''/'') && !(''..'' in self.split(''/''))'
+                    maxItems: 64
+                    type: array
+                    x-kubernetes-list-type: atomic
+                type: object
+              placement:
+                default:
+                  mode: standalone
+                description: |-
+                  placement says where the sync pod runs. It is defaulted as a whole so a
+                  Treebind without it reads back as standalone.
+                properties:
+                  mode:
+                    default: standalone
+                    description: |-
+                      mode is standalone to run the sync pod on its own, or sidecar to run the
+                      sync container inside the application's pods.
+                    enum:
+                    - standalone
+                    - sidecar
+                    type: string
+                type: object
+              repository:
+                description: repository is the Git repository to sync with.
+                properties:
+                  auth:
+                    description: auth names the credentials for the repository.
+                    properties:
+                      knownHostsConfigMapRef:
+                        description: |-
+                          knownHostsConfigMapRef points to the ConfigMap key that holds the
+                          known_hosts entries used to verify the Git host.
+                        properties:
+                          key:
+                            description: key is the key inside the Secret or ConfigMap
+                              that holds the value.
+                            maxLength: 253
+                            minLength: 1
+                            type: string
+                          name:
+                            description: name is the name of the Secret or ConfigMap.
+                            maxLength: 253
+                            minLength: 1
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                      sshKeySecretRef:
+                        description: sshKeySecretRef points to the Secret key that
+                          holds the private SSH key.
+                        properties:
+                          key:
+                            description: key is the key inside the Secret or ConfigMap
+                              that holds the value.
+                            maxLength: 253
+                            minLength: 1
+                            type: string
+                          name:
+                            description: name is the name of the Secret or ConfigMap.
+                            maxLength: 253
+                            minLength: 1
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                    type: object
+                  branch:
+                    description: |-
+                      branch is the branch to follow. The repository's default branch is used
+                      when it is empty.
+                    maxLength: 255
+                    type: string
+                    x-kubernetes-validations:
+                    - message: branch must not contain '..' or '@{', start with '-'
+                        or '/', or end with '.lock' or '/'
+                      rule: '!self.contains(''..'') && !self.contains(''@{'') && !self.startsWith(''-'')
+                        && !self.startsWith(''/'') && !self.endsWith(''.lock'') &&
+                        !self.endsWith(''/'')'
+                    - message: branch must not contain whitespace, control characters,
+                        '~', '^', ':', '?', '*', '[' or a backslash, nor '//', a component
+                        that starts with '.', or a trailing '.'
+                      rule: '!self.matches(r''[\x00-\x20\x7f~^:?*\[\\]'') && !self.contains(''//'')
+                        && self != ''@'' && !self.matches(r''(^|/)\.'') && !self.endsWith(''.'')'
+                  path:
+                    description: |-
+                      path is a directory inside the repository. Only that directory is synced
+                      with the volume. The whole repository is used when it is empty.
+                    maxLength: 1024
+                    type: string
+                    x-kubernetes-validations:
+                    - message: path must be relative, must not be '.' and must not
+                        contain '..', '//' or a backslash
+                      rule: '!self.startsWith(''/'') && self != ''.'' && !self.contains(''\\'')
+                        && !self.contains(''//'') && !(''..'' in self.split(''/''))'
+                    - message: path must not end with '/' or contain a '.' or '.git'
+                        segment
+                      rule: '!self.endsWith(''/'') && !(''.'' in self.split(''/''))
+                        && !(''.git'' in self.split(''/''))'
+                  url:
+                    description: |-
+                      url is the address of the repository, for example
+                      ssh://git@github.com/acme/dashboards.git. The scheme must be explicit;
+                      the scp-style git@host:path shorthand is not accepted. Credentials never
+                      go in the URL: they are supplied through auth.
+                    maxLength: 2048
+                    minLength: 1
+                    type: string
+                    x-kubernetes-validations:
+                    - message: url must use an explicit ssh://, https:// or http://
+                        scheme; scp-style host:path is not accepted
+                      rule: isURL(self) && url(self).getScheme() in ['ssh', 'https',
+                        'http']
+                    - message: url must not contain whitespace or control characters
+                      rule: '!self.matches(r''[\x00-\x20\x7f]'')'
+                    - message: url must not embed a password; supply credentials through
+                        auth
+                      rule: '!self.matches(''^[a-zA-Z][a-zA-Z0-9+.-]*://[^/@]*:[^/@]*@'')'
+                    - message: http and https urls must not embed credentials; supply
+                        credentials through auth
+                      rule: '!self.matches(''^https?://[^/]*@'')'
+                required:
+                - url
+                type: object
+              sync:
+                description: sync controls the direction and timing of the sync.
+                properties:
+                  conflictPolicy:
+                    default: followRemote
+                    description: conflictPolicy says which side wins when both changed
+                      the same file.
+                    enum:
+                    - followRemote
+                    - followLocal
+                    type: string
+                  direction:
+                    description: |-
+                      direction is pull for a read-only mirror, or bidirectional to also commit
+                      and push the application's edits.
+                    enum:
+                    - pull
+                    - bidirectional
+                    type: string
+                  interval:
+                    default: 30s
+                    description: interval is how often the agent polls the repository
+                      for new commits.
+                    maxLength: 32
+                    type: string
+                    x-kubernetes-validations:
+                    - message: interval must be at least 1s
+                      rule: duration(self) >= duration('1s')
+                  settleTime:
+                    default: 5s
+                    description: |-
+                      settleTime is the quiet period after the last local edit before the agent
+                      commits, so a file that is still being written is not committed half done.
+                    maxLength: 32
+                    type: string
+                    x-kubernetes-validations:
+                    - message: settleTime must be at least 1s
+                      rule: duration(self) >= duration('1s')
+                required:
+                - direction
+                type: object
+              target:
+                description: target is the volume the files live on.
+                properties:
+                  claimName:
+                    description: |-
+                      claimName is the name of an existing PersistentVolumeClaim in the same
+                      namespace as the Treebind. It cannot be changed after creation.
+                    maxLength: 253
+                    minLength: 1
+                    type: string
+                  mountPath:
+                    description: |-
+                      mountPath is where the claim is mounted inside the sync container. It
+                      does not affect where the application mounts the claim.
+                    maxLength: 1024
+                    type: string
+                    x-kubernetes-validations:
+                    - message: mountPath must be an absolute path without '..'
+                      rule: self.startsWith('/') && !('..' in self.split('/'))
+                  subPath:
+                    description: |-
+                      subPath is a directory inside the claim. Only that directory is synced
+                      with the repository. The whole claim is used when it is empty. It cannot
+                      be changed after creation.
+                    maxLength: 1024
+                    type: string
+                    x-kubernetes-validations:
+                    - message: subPath must be relative, must not be '.' and must
+                        not contain '..', '//' or a backslash
+                      rule: '!self.startsWith(''/'') && self != ''.'' && !self.contains(''\\'')
+                        && !self.contains(''//'') && !(''..'' in self.split(''/''))'
+                    - message: subPath must not end with '/' or contain a '.' or '.git'
+                        segment
+                      rule: '!self.endsWith(''/'') && !(''.'' in self.split(''/''))
+                        && !(''.git'' in self.split(''/''))'
+                required:
+                - claimName
+                type: object
+                x-kubernetes-validations:
+                - message: claimName is immutable
+                  rule: self.claimName == oldSelf.claimName
+                - message: subPath is immutable
+                  rule: has(self.subPath) == has(oldSelf.subPath) && (!has(self.subPath)
+                    || self.subPath == oldSelf.subPath)
+            required:
+            - repository
+            - sync
+            - target
             type: object
           status:
             description: status defines the observed state of Treebind
             properties:
               conditions:
                 description: |-
-                  conditions represent the current state of the Treebind resource.
-                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
-
-                  Standard condition types include:
-                  - "Available": the resource is fully functional
-                  - "Progressing": the resource is being created or updated
-                  - "Degraded": the resource failed to reach or maintain its desired state
-
-                  The status of each condition is one of True, False, or Unknown.
+                  conditions represent the current state of the Treebind resource. Each
+                  condition has a unique type and is set by the reconciler. The status of
+                  each condition is one of True, False, or Unknown.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -116,10 +539,29 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              lastSyncTime:
+                description: lastSyncTime is when the last sync finished.
+                format: date-time
+                type: string
+              lastSyncedCommit:
+                description: |-
+                  lastSyncedCommit is the commit the volume and the repository last agreed
+                  on.
+                type: string
+              observedGeneration:
+                description: |-
+                  observedGeneration is the generation of the spec that the status
+                  describes. A status older than metadata.generation is not up to date.
+                format: int64
+                type: integer
             type: object
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: metadata.name must be at most 56 characters, so the sync pod name,
+            the name plus '-sync-0', fits the 63-character DNS label limit
+          rule: '!has(self.metadata.name) || self.metadata.name.size() <= 56'
     served: true
     storage: true
     subresources:

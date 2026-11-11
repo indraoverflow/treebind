@@ -44,8 +44,9 @@ help: ## Display this help.
 ##@ Development
 
 .PHONY: manifests
-manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
+manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects, and the chart's copy of the CRD.
 	"$(CONTROLLER_GEN)" rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	hack/sync-chart-crd.sh config/crd/bases/treebind.example.org_treebinds.yaml charts/treebind/templates/crd/treebinds.treebind.example.org.yaml
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -109,12 +110,12 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 ##@ Build
 
 .PHONY: build
-build: manifests generate fmt vet ## Build manager binary.
-	go build -o bin/manager cmd/main.go
+build: manifests generate fmt vet ## Build the operator and agent binaries into bin/.
+	go build -o bin/ ./cmd/...
 
 .PHONY: run
-run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/main.go
+run: manifests generate fmt vet ## Run the operator from your host.
+	go run ./cmd/operator
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
@@ -122,11 +123,11 @@ run: manifests generate fmt vet ## Run a controller from your host.
 # Override BASE_IMAGE to build from another registry, e.g.
 # make docker-build IMG=<img> BASE_IMAGE=docker.io/library/golang:1.26
 .PHONY: docker-build
-docker-build: ## Build docker image with the manager.
+docker-build: ## Build the operator image.
 	$(CONTAINER_TOOL) build $(if $(BASE_IMAGE),--build-arg BASE_IMAGE=$(BASE_IMAGE)) -t ${IMG} .
 
 .PHONY: docker-push
-docker-push: ## Push docker image with the manager.
+docker-push: ## Push the operator image.
 	$(CONTAINER_TOOL) push ${IMG}
 
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
@@ -137,7 +138,7 @@ docker-push: ## Push docker image with the manager.
 # To adequately provide solutions that are compatible with multiple platforms, you should consider using this option.
 PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
 .PHONY: docker-buildx
-docker-buildx: ## Build and push docker image for the manager for cross-platform support
+docker-buildx: ## Build and push the operator image for several platforms.
 	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
 	- $(CONTAINER_TOOL) buildx create --name treebind-builder
@@ -177,6 +178,56 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" delete --ignore-not-found=$(ignore-not-found) -f -
 
+##@ Development cluster
+
+KIND_DEV_CLUSTER ?= treebind-dev
+
+.PHONY: dev
+dev: ko ## Create a kind cluster, build the images into it, deploy the operator and start the dev Git remote.
+	@command -v $(KIND) >/dev/null 2>&1 || { \
+		echo "Kind is not installed. Please install Kind manually."; \
+		exit 1; \
+	}
+	@if $(KIND) get clusters | grep -qx "$(KIND_DEV_CLUSTER)"; then \
+		echo "Kind cluster '$(KIND_DEV_CLUSTER)' already exists. Skipping creation."; \
+	else \
+		echo "Creating Kind cluster '$(KIND_DEV_CLUSTER)'..."; \
+		$(KIND) create cluster --name $(KIND_DEV_CLUSTER); \
+	fi
+	@# Rerunning `make dev` must deploy into the dev cluster even when the
+	@# current kubectl context has moved elsewhere in the meantime.
+	@$(KIND) export kubeconfig --name $(KIND_DEV_CLUSTER)
+	@# `deploy` rewrites the image in the tracked config/manager/kustomization.yaml.
+	@# Put the file back on exit so a dev run never leaves a diff to commit.
+	@set -e; \
+	kustomization=config/manager/kustomization.yaml; \
+	cp "$$kustomization" "$$kustomization.dev-bak"; \
+	trap 'mv -f "$$kustomization.dev-bak" "$$kustomization"' EXIT; \
+	export KO_DOCKER_REPO=kind.local KIND_CLUSTER_NAME=$(KIND_DEV_CLUSTER); \
+	platform="linux/$$(go env GOARCH)"; \
+	operator_img="$$("$(KO)" build --base-import-paths --platform="$$platform" ./cmd/operator)"; \
+	agent_img="$$("$(KO)" build --base-import-paths --platform="$$platform" ./cmd/agent)"; \
+	$(MAKE) install deploy IMG="$$operator_img"; \
+	"$(KUBECTL)" -n treebind-system set env deployment/treebind-controller-manager AGENT_IMAGE="$$agent_img"; \
+	"$(KUBECTL)" apply -k config/dev; \
+	"$(KUBECTL)" -n treebind-system rollout status deployment/treebind-controller-manager --timeout=180s; \
+	"$(KUBECTL)" -n treebind-dev rollout status deployment/git-remote --timeout=180s; \
+	echo ""; \
+	echo "The dev cluster is ready. Next steps:"; \
+	echo ""; \
+	echo "  kubectl apply -f config/samples/treebind_v1alpha1_treebind.yaml"; \
+	echo "  kubectl get treebind,statefulset,service"; \
+	echo "  kubectl -n treebind-system logs deploy/treebind-controller-manager -f"; \
+	echo ""; \
+	echo "  kubectl -n treebind-dev port-forward svc/git-remote 9418:9418 &"; \
+	echo "  git clone git://127.0.0.1/sample.git"; \
+	echo ""; \
+	echo "Delete the cluster with 'make dev-down'."
+
+.PHONY: dev-down
+dev-down: ## Delete the kind cluster used by 'make dev'.
+	@$(KIND) delete cluster --name $(KIND_DEV_CLUSTER)
+
 ##@ Dependencies
 
 ## Location to install dependencies to
@@ -191,10 +242,13 @@ KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
+KO ?= $(LOCALBIN)/ko
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.8.1
 CONTROLLER_TOOLS_VERSION ?= v0.22.0
+# The same ko version ci.yml and release.yml pin.
+KO_VERSION ?= v0.19.1
 
 #ENVTEST_VERSION is the controller-runtime version to use for setup-envtest, derived from go.mod
 ENVTEST_VERSION ?= $(shell v='$(call gomodver,sigs.k8s.io/controller-runtime)'; \
@@ -229,6 +283,11 @@ setup-envtest: envtest ## Download the binaries required for ENVTEST in the loca
 envtest: $(ENVTEST) ## Download setup-envtest locally if necessary.
 $(ENVTEST): $(LOCALBIN)
 	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest,$(ENVTEST_VERSION))
+
+.PHONY: ko
+ko: $(KO) ## Download ko locally if necessary.
+$(KO): $(LOCALBIN)
+	$(call go-install-tool,$(KO),github.com/google/ko,$(KO_VERSION))
 
 .PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
